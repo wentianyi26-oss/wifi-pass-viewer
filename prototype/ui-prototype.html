@@ -15,6 +15,13 @@
         C = 控制台表格（极客风，键盘优先）
         底部浮动条左右切换；← → 键也可切换。
   评审后：选定赢家并入正式实现，全套变体存档到 throwaway 分支。
+  ───────────────────────────────────────────────────────────────────
+  v2（按 docs/review-round-1.md 迭代）：
+    · 已连接网络置顶 + 默认选中
+    · 全局一键显示/隐藏（Esc = 全部隐藏；按钮文案随状态变化）
+    · 复制提示不再显示密码明文
+    · 新增二维码弹窗（原型为示意图案，正式版生成可扫二维码）
+    · B 吸收 C 的键盘流（/ ↑↓ Enter C），A/B/C 三变体统一支持
   ═══════════════════════════════════════════════════════════════════
 -->
 <style>
@@ -41,6 +48,19 @@
     opacity: 0; transform: translateY(8px); transition: all .22s ease; pointer-events: none;
   }
   #toast.show { opacity: 1; transform: translateY(0); }
+
+  /* ── 二维码弹窗（二维码=评审 P0 建议） ─────────────────────── */
+  #qr-modal.hidden { display: none; }
+  #qr-modal { position: fixed; inset: 0; z-index: 960; display: grid; place-items: center; }
+  .qr-backdrop { position: absolute; inset: 0; background: rgba(15,23,42,.45); backdrop-filter: blur(2px); }
+  .qr-card { position: relative; background: #fff; border-radius: 16px; padding: 26px 30px 20px; text-align: center; box-shadow: 0 24px 60px rgba(0,0,0,.35); min-width: 300px; }
+  .qr-x { all: unset; position: absolute; top: 10px; right: 12px; cursor: pointer; color: #9ca3af; font-size: 15px; padding: 6px 9px; border-radius: 8px; }
+  .qr-x:hover { background: #f3f4f6; color: #374151; }
+  .qr-title { font-size: 16px; font-weight: 600; color: #1f2937; margin-bottom: 2px; }
+  .qr-ssid { font-size: 13px; color: #6b7280; margin-bottom: 14px; }
+  #qr-canvas { width: 210px; height: 210px; image-rendering: pixelated; border: 1px solid #eee; border-radius: 8px; }
+  .qr-pw { font-family: var(--mono); font-size: 14px; color: #059669; margin-top: 12px; word-break: break-all; }
+  .qr-note { font-size: 11px; color: #9ca3af; margin-top: 12px; }
 
   /* ── 浮动变体切换条（原型工具，不属于任何变体） ────────────── */
   #switcher {
@@ -116,6 +136,10 @@
   .vb-search input { width: 100%; padding: 8px 12px 8px 34px; border-radius: 8px; border: 1px solid #e0e0e0; background: #fff; font-size: 13px; outline: none; }
   .vb-search input:focus { border-color: #0067c0; box-shadow: 0 0 0 2px rgba(0,103,192,.15); }
   .vb-search::before { content: "⌕"; position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: #9a9a9a; }
+  .vb-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px 2px; gap: 8px; }
+  .vb-mini { all: unset; cursor: pointer; font-size: 12px; color: #0067c0; padding: 4px 8px; border-radius: 6px; white-space: nowrap; }
+  .vb-mini:hover { background: #e8f1fb; }
+  .vb-hint { font-size: 11px; color: #8a8a8a; text-align: right; line-height: 1.5; }
   .vb-list { flex: 1; overflow-y: auto; padding: 8px 8px 90px; }
   .vb-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; cursor: pointer; position: relative; }
   .vb-row:hover { background: #f0f0f0; }
@@ -125,7 +149,7 @@
   .vb-row.sel .ico { background: #d6e8f8; }
   .vb-row .meta { flex: 1; min-width: 0; }
   .vb-row .ssid { font-size: 13.5px; color: #202020; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .vb-row .sub { font-size: 11.5px; color: #8a8a8a; margin-top: 1px; }
+  .vb-row .sub { font-size: 11.5px; color: #6b6b6b; margin-top: 1px; }
   .vb-row .conn { font-size: 10.5px; color: #0f7b0f; background: #dff6dd; padding: 2px 7px; border-radius: 999px; flex: none; }
   .vb-detail { flex: 1; overflow-y: auto; padding: 40px 46px 110px; }
   .vb-detail h2 { font-size: 26px; color: #1a1a1a; font-weight: 600; word-break: break-all; }
@@ -143,6 +167,8 @@
   .vb-copy { border: none; cursor: pointer; background: #0067c0; color: #fff; font-size: 14px; font-weight: 600; padding: 11px 26px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,103,192,.35); }
   .vb-copy:hover { background: #005a9e; }
   .vb-copy:disabled, .vb-copy.off { background: #c9c9c9; box-shadow: none; cursor: default; }
+  .vb-copy.secondary { background: #fff; color: #0067c0; border: 1px solid #0067c0; box-shadow: none; }
+  .vb-copy.secondary:hover { background: #e8f1fb; }
   .vb-kv { border-top: 1px solid #f0f0f0; }
   .vb-kv .r { display: flex; justify-content: space-between; padding: 12px 18px; font-size: 13.5px; border-bottom: 1px solid #f0f0f0; }
   .vb-kv .r:last-child { border-bottom: none; }
@@ -195,6 +221,17 @@
   <button id="sw-next" title="下一个变体（→）">▶</button>
   <div class="dots" id="sw-dots"></div>
 </div>
+<div id="qr-modal" class="hidden">
+  <div class="qr-backdrop" onclick="closeQR()"></div>
+  <div class="qr-card">
+    <button class="qr-x" onclick="closeQR()">✕</button>
+    <div class="qr-title">扫码连接 WiFi</div>
+    <div class="qr-ssid" id="qr-ssid"></div>
+    <canvas id="qr-canvas" width="210" height="210"></canvas>
+    <div class="qr-pw" id="qr-pw"></div>
+    <div class="qr-note">原型示意 · 正式版生成可扫的真二维码</div>
+  </div>
+</div>
 <div id="toast"></div>
 
 <script>
@@ -227,7 +264,9 @@ const VARIANTS = [
 function mask(pw) { return "•".repeat(Math.min(pw.length, 14)); }
 function visibleNetworks() {
   const q = state.query.trim().toLowerCase();
-  return NETWORKS.filter(n => !q || n.ssid.toLowerCase().includes(q));
+  return NETWORKS
+    .filter(n => !q || n.ssid.toLowerCase().includes(q))
+    .sort((a, b) => (b.connected ? 1 : 0) - (a.connected ? 1 : 0)); // 已连接置顶（排序稳定，其余保持原序）
 }
 function toast(msg) {
   const t = document.getElementById("toast");
@@ -242,7 +281,7 @@ async function copyText(txt) {
     try { document.execCommand("copy"); } catch {}
     ta.remove();
   }
-  toast("已复制到剪贴板：" + (txt.length > 18 ? txt.slice(0, 18) + "…" : txt));
+  toast("密码已复制到剪贴板"); // 评审 #3：提示不出现密码明文
 }
 function toggleShow(ssid) {
   if (state.shown.has(ssid)) state.shown.delete(ssid); else state.shown.add(ssid);
@@ -253,6 +292,7 @@ function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"
 /* ═══════════════ 变体 A · 卡片网格 ═══════════════ */
 function renderA() {
   const list = visibleNetworks();
+  const allShown = list.length > 0 && list.every(n => state.shown.has(n.ssid));
   const cards = list.map(n => {
     const shownPw = state.shown.has(n.ssid);
     let pwHtml;
@@ -294,7 +334,7 @@ function renderA() {
       </div>
       <div class="va-bar">
         <div class="va-search"><input id="va-q" placeholder="搜索 WiFi 名称…" value="${esc(state.query)}"></div>
-        <button class="va-btn ghost" onclick="vl_all(this)">全部显示</button>
+        <button class="va-btn ghost" onclick="vl_all(this)">${allShown ? "全部隐藏" : "全部显示"}</button>
         <button class="va-btn" onclick="toast('已重新扫描已保存的网络（原型演示）')">↻ 刷新</button>
       </div>
     </div>
@@ -311,6 +351,7 @@ function vl_all(btn) {
 /* ═══════════════ 变体 B · 主从分栏 ═══════════════ */
 function renderB() {
   const list = visibleNetworks();
+  const allShown = list.length > 0 && list.every(n => state.shown.has(n.ssid));
   if (list.length && state.selected >= list.length) state.selected = 0;
   const cur = list[state.selected] || null;
   const rows = list.map((n, i) => `
@@ -341,6 +382,7 @@ function renderB() {
           <button class="vb-pw-eye" title="${shownPw ? "隐藏" : "显示"}" onclick="toggleShow('${esc(cur.ssid)}')">${shownPw ? "🙈" : "👁"}</button>
           <div class="vb-pw-val ${shownPw ? "shown" : ""}">${shownPw ? esc(cur.pw) : mask(cur.pw)}</div>
           <button class="vb-copy" onclick="copyText('${esc(cur.pw)}')">复制密码</button>
+          <button class="vb-copy secondary" onclick="showQR('${esc(cur.ssid)}')">二维码</button>
         </div>`;
     }
     detail = `
@@ -372,13 +414,23 @@ function renderB() {
         <h1>WiFi 密码查看器</h1>
         <div class="cnt">已保存 ${NETWORKS.length} 个网络 · 选择查看详情</div>
       </div>
-      <div class="vb-search"><input id="vb-q" placeholder="搜索…" value="${esc(state.query)}"></div>
+      <div class="vb-search"><input id="vb-q" placeholder="搜索…（按 /）" value="${esc(state.query)}"></div>
+      <div class="vb-toolbar">
+        <button class="vb-mini" onclick="vb_toggle_all()">${allShown ? "🙈 全部隐藏" : "👁 全部显示"}</button>
+        <span class="vb-hint">/ 搜索 · ↑↓ 选择<br>Enter 显示 · C 复制 · Esc 隐藏</span>
+      </div>
       <div class="vb-list">${rows || `<div style="padding:20px;color:#8a8a8a;font-size:13px">没有匹配的网络</div>`}</div>
     </div>
     <div class="vb-detail">${detail}</div>
   </div>`;
 }
 function vb_select(i) { state.selected = i; render(); }
+function vb_toggle_all() {
+  const list = visibleNetworks();
+  const all = list.length > 0 && list.every(n => state.shown.has(n.ssid));
+  list.forEach(n => all ? state.shown.delete(n.ssid) : state.shown.add(n.ssid));
+  render();
+}
 
 /* ═══════════════ 变体 C · 控制台表格 ═══════════════ */
 function renderC() {
@@ -416,6 +468,7 @@ function renderC() {
       <span><b>↑↓</b> 选择</span>
       <span><b>Enter</b> 显示/隐藏</span>
       <span><b>C</b> 复制密码</span>
+      <span><b>Esc</b> 全部隐藏</span>
       <span class="cursor">variant C :: console</span>
     </div>
   </div>`;
@@ -467,28 +520,66 @@ function cycle(step) {
 document.getElementById("sw-prev").addEventListener("click", () => cycle(-1));
 document.getElementById("sw-next").addEventListener("click", () => cycle(1));
 
-/* 键盘：← → 切换变体（输入框聚焦时不拦截）；C 变体支持 ↑↓ / Enter / C / / */
+/* ═══════════════ 二维码弹窗（评审 P0 #4） ═══════════════ */
+function showQR(ssid) {
+  const n = NETWORKS.find(x => x.ssid === ssid);
+  if (!n || !n.pw) return;
+  document.getElementById("qr-ssid").textContent = n.ssid;
+  document.getElementById("qr-pw").textContent = n.pw;
+  drawMockQR(document.getElementById("qr-canvas"), "WIFI:S:" + n.ssid + ";T:WPA;P:" + n.pw + ";;");
+  document.getElementById("qr-modal").classList.remove("hidden");
+}
+function closeQR() { document.getElementById("qr-modal").classList.add("hidden"); }
+function drawMockQR(canvas, seedStr) {
+  // 原型示意图案（非真二维码）；正式版用真算法生成可扫二维码
+  const N = 21, cell = 10;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  let h = 2166136261 >>> 0;
+  for (const ch of seedStr) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; }
+  const rnd = () => { h ^= h << 13; h ^= h >>> 17; h ^= h << 5; h >>>= 0; return h / 4294967296; };
+  ctx.fillStyle = "#111827";
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (rnd() < 0.44) ctx.fillRect(x * cell, y * cell, cell, cell);
+  const finder = (fx, fy) => {
+    ctx.fillStyle = "#111827"; ctx.fillRect(fx * cell, fy * cell, 7 * cell, 7 * cell);
+    ctx.fillStyle = "#fff";     ctx.fillRect((fx + 1) * cell, (fy + 1) * cell, 5 * cell, 5 * cell);
+    ctx.fillStyle = "#111827";  ctx.fillRect((fx + 2) * cell, (fy + 2) * cell, 3 * cell, 3 * cell);
+  };
+  finder(0, 0); finder(N - 7, 0); finder(0, N - 7);
+}
+
+/* 键盘：← → 切换变体（输入框聚焦时不拦截）；B/C 支持 ↑↓ / Enter / C；/ 聚焦搜索；Esc 全部隐藏 */
 document.addEventListener("keydown", e => {
   const t = e.target;
   const typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+  const modalOpen = !document.getElementById("qr-modal").classList.contains("hidden");
+  if (modalOpen) {
+    if (e.key === "Escape") { closeQR(); }
+    return;
+  }
   if (typing) {
     if (e.key === "Escape" && t.id) { state.query = ""; render(); }
     return;
   }
-  if (e.key === "ArrowLeft") { cycle(-1); e.preventDefault(); }
-  else if (e.key === "ArrowRight") { cycle(1); e.preventDefault(); }
-  else if (state.variant === "C") {
-    const list = visibleNetworks();
+  if (e.key === "ArrowLeft") { cycle(-1); e.preventDefault(); return; }
+  if (e.key === "ArrowRight") { cycle(1); e.preventDefault(); return; }
+  if (e.key === "Escape") { state.shown.clear(); render(); return; }   // 全部隐藏（评审 P0 #2）
+  const list = visibleNetworks();
+  if (state.variant === "B" || state.variant === "C") {
     if (e.key === "ArrowDown") { state.selected = Math.min(state.selected + 1, list.length - 1); render(); e.preventDefault(); }
     else if (e.key === "ArrowUp") { state.selected = Math.max(state.selected - 1, 0); render(); e.preventDefault(); }
     else if (e.key === "Enter" && list[state.selected]) { toggleShow(list[state.selected].ssid); e.preventDefault(); }
-    else if ((e.key === "c" || e.key === "C") && list[state.selected]?.pw) { copyText(list[state.selected].pw); e.preventDefault(); }
-    else if (e.key === "/") { const q = document.getElementById("vc-q"); if (q) { q.focus(); e.preventDefault(); } }
+    else if ((e.key === "c" || e.key === "C") && list[state.selected] && list[state.selected].pw) { copyText(list[state.selected].pw); e.preventDefault(); }
+  }
+  if (e.key === "/") {
+    const q = document.getElementById("va-q") || document.getElementById("vb-q") || document.getElementById("vc-q");
+    if (q) { q.focus(); e.preventDefault(); }
   }
 });
 
-/* 启动 */
+/* 启动：默认选中已连接的网络（评审 P0 #1） */
 state.variant = getVariant();
+state.selected = Math.max(0, visibleNetworks().findIndex(n => n.connected));
 render();
 </script>
 </body>
