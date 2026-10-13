@@ -184,7 +184,7 @@ function renderDetail() {
       ${cur.connected ? '<span class="tag blue">已连接</span>' : '<span class="tag">未连接</span>'}
     </div>
     <div class="panel">
-      <div class="t">网络密码</div>
+      <div class="t">网络密码 <span class="src">读取自本机 Windows 存档（netsh）</span></div>
       ${pwBox}
     </div>
     <div class="panel">
