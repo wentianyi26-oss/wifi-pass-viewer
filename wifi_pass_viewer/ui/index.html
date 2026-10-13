@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WiFi 密码查看器</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <header class="side-head">
+      <div class="title-row">
+        <h1>WiFi 密码查看器</h1>
+        <button id="refresh" class="icon-btn" title="重新扫描">↻</button>
+      </div>
+      <div class="cnt" id="count-line">正在读取本机 WiFi 存档…</div>
+    </header>
+    <div class="search-wrap">
+      <input id="search" type="search" placeholder="搜索 WiFi 名称（按 /）" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="toolbar">
+      <button id="toggle-all" class="mini" disabled>全部显示</button>
+      <span class="hint">↑↓ 选择 · Enter 显示<br>C 复制 · Esc 全部隐藏</span>
+    </div>
+    <div class="list" id="list"></div>
+    <div class="side-foot" id="foot-note">密码读取自本机存档 · 不联网 · 不上传</div>
+  </aside>
+  <main class="detail" id="detail"></main>
+</div>
+
+<div id="toast"></div>
+
+<div id="qr-modal" class="hidden">
+  <div class="qr-backdrop" id="qr-backdrop"></div>
+  <div class="qr-card">
+    <button class="qr-x" id="qr-close">✕</button>
+    <div class="qr-title">扫码连接 WiFi</div>
+    <div class="qr-ssid" id="qr-ssid"></div>
+    <canvas id="qr-canvas" width="252" height="252"></canvas>
+    <div class="qr-pw" id="qr-pw"></div>
+    <div class="qr-note">用手机相机或系统扫一扫即可连接</div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
