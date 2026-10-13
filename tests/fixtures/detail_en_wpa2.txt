@@ -1,0 +1,12 @@
+
+Profile HomeNet on interface WLAN:
+======================================================================= 
+
+Applied: All User Profile
+
+Security settings
+-----------------
+    Authentication         : WPA2-Personal
+    Cipher                 : CCMP
+    Security key           : Present
+    Key Content            : testpass123

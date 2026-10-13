@@ -1,0 +1,12 @@
+
+Profiles on interface WLAN:
+
+Group policy profiles (read-only)
+---------------------------------
+    <None>
+
+User profiles
+-------------
+    All User Profile     : HomeNet
+    All User Profile     : Cafe_Guest
+    All User Profile     : Office-Annex
