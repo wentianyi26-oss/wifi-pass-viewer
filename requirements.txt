@@ -1,0 +1,2 @@
+pywebview>=6.0
+qrcode>=8.0

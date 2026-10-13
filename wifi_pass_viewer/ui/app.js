@@ -14,7 +14,11 @@ const state = {
   error: null,
   note: null,           // 连接状态不可用等降级说明
   connectedAvailable: false,
+  appInfo: null,        // { version, repo_url }
+  showIntro: false,     // 首启说明卡
 };
+
+const INTRO_SEEN_KEY = "wpv-intro-seen";
 
 /* ── 工具 ────────────────────────────────────────────── */
 const $ = (id) => document.getElementById(id);
@@ -29,7 +33,20 @@ function toast(msg) {
   t._h = setTimeout(() => t.classList.remove("show"), 1600);
 }
 
+let clipboardClearTimer = null;
+
 async function copyText(text) {
+  const api = window.pywebview && window.pywebview.api;
+  if (api && api.copy_password) {
+    try {
+      const result = await api.copy_password(text);
+      if (result && result.ok) {
+        toast("已复制 · 不会进入剪贴板历史");
+        scheduleClipboardClear(text);
+        return;
+      }
+    } catch { /* 走下面的兜底 */ }
+  }
   let ok = false;
   try {
     await navigator.clipboard.writeText(text);
@@ -45,6 +62,17 @@ async function copyText(text) {
   toast(ok ? "密码已复制到剪贴板" : "复制失败，请手动选择复制");
 }
 
+function scheduleClipboardClear(text) {
+  // 60 秒后清除剪贴板（仅当内容仍是刚复制的密码时，避免误删用户后来的复制）
+  clearTimeout(clipboardClearTimer);
+  clipboardClearTimer = setTimeout(async () => {
+    const api = window.pywebview && window.pywebview.api;
+    if (api && api.clear_clipboard_if_matches) {
+      try { await api.clear_clipboard_if_matches(text); } catch { /* 忽略 */ }
+    }
+  }, 60000);
+}
+
 function visibleNetworks() {
   const q = state.query.trim().toLowerCase();
   return state.networks.filter((n) => !q || n.ssid.toLowerCase().includes(q));
@@ -53,6 +81,17 @@ function visibleNetworks() {
 function allShownOf(list) {
   const withPw = list.filter((n) => n.has_password);
   return withPw.length > 0 && withPw.every((n) => state.shown.has(n.ssid));
+}
+
+function listChip(n) {
+  if (n.connected) return '<span class="conn">已连接</span>';
+  if (n.has_password) return "";
+  const note = n.note || "";
+  const title = note ? ` title="${esc(note)}"` : "";
+  if (note.includes("读取失败")) return `<span class="chip warn"${title}>读取失败</span>`;
+  if (note.includes("开放")) return `<span class="chip"${title}>开放网络</span>`;
+  if (note.includes("企业")) return `<span class="chip"${title}>企业网络</span>`;
+  return `<span class="chip"${title}>无密码</span>`;
 }
 
 /* ── 数据加载 ────────────────────────────────────────── */
@@ -122,7 +161,7 @@ function renderSidebar() {
         <div class="ssid">${esc(n.ssid)}</div>
         <div class="sub">${esc(n.authentication || "未知加密")}${n.cipher ? " · " + esc(n.cipher) : ""}</div>
       </div>
-      ${n.connected ? '<span class="conn">已连接</span>' : ""}
+      ${listChip(n)}
     </div>`).join("");
   document.querySelectorAll(".row").forEach((row) =>
     row.addEventListener("click", () => selectIndex(Number(row.dataset.idx))));
@@ -178,6 +217,11 @@ function renderDetail() {
   ];
 
   el.innerHTML = `
+    ${state.showIntro ? `
+    <div class="intro-card">
+      <p>第一次使用？密码读取自本机 Windows 存档，<b>不联网、不上传</b>。左侧灰色标签的网络（开放 / 企业）本来就不保存密码，点开有说明。</p>
+      <button class="mini" id="intro-ok">知道了</button>
+    </div>` : ""}
     <h2>${esc(cur.ssid)}</h2>
     <div class="subrow">
       <span class="tag ok">🔒 ${esc(cur.authentication || "未知加密")}</span>
@@ -199,17 +243,49 @@ function renderDetail() {
     $("copy-btn").addEventListener("click", () => copyText(cur.password));
     $("qr-btn").addEventListener("click", () => openQR(cur));
   }
+  const introOk = $("intro-ok");
+  if (introOk) introOk.addEventListener("click", dismissIntro);
 }
 
 function renderFootNote() {
   const el = $("foot-note");
-  if (state.note) {
-    el.textContent = state.note;
-    el.classList.add("warn");
-  } else {
-    el.textContent = "密码读取自本机存档 · 不联网 · 不上传";
-    el.classList.remove("warn");
+  const text = state.note || "密码读取自本机存档 · 不联网 · 不上传";
+  el.innerHTML =
+    `<span class="foot-text">${esc(text)}</span>` +
+    (state.note ? '<button class="mini" id="fix-location">去开启</button>' : "") +
+    '<button class="mini" id="open-about">关于</button>';
+  el.classList.toggle("warn", !!state.note);
+  const fix = $("fix-location");
+  if (fix) fix.addEventListener("click", () => apiOpenUrl("ms-settings:privacy-location"));
+  $("open-about").addEventListener("click", openAbout);
+}
+
+function apiOpenUrl(url) {
+  const api = window.pywebview && window.pywebview.api;
+  if (api && api.open_url) api.open_url(url);
+  else window.open(url, "_blank");
+}
+
+async function initAppInfo() {
+  const api = window.pywebview && window.pywebview.api;
+  if (api && api.get_app_info) {
+    try { state.appInfo = await api.get_app_info(); } catch { state.appInfo = null; }
   }
+}
+
+async function openAbout() {
+  if (!state.appInfo) await initAppInfo();
+  $("about-version").textContent = state.appInfo ? `版本 v${state.appInfo.version}` : "版本未知";
+  $("about-modal").classList.remove("hidden");
+}
+
+function introSeen() {
+  try { return localStorage.getItem(INTRO_SEEN_KEY) === "1"; } catch { return true; }
+}
+function dismissIntro() {
+  try { localStorage.setItem(INTRO_SEEN_KEY, "1"); } catch { /* 忽略 */ }
+  state.showIntro = false;
+  render();
 }
 
 /* ── 交互 ────────────────────────────────────────────── */
@@ -261,7 +337,9 @@ async function openQR(net) {
   }
 }
 function closeQR() { $("qr-modal").classList.add("hidden"); }
+function closeAboutModal() { $("about-modal").classList.add("hidden"); }
 const qrOpen = () => !$("qr-modal").classList.contains("hidden");
+const aboutOpen = () => !$("about-modal").classList.contains("hidden");
 
 /* ── 键盘流（评审 round-1） ──────────────────────────── */
 document.addEventListener("keydown", (e) => {
@@ -270,6 +348,10 @@ document.addEventListener("keydown", (e) => {
 
   if (qrOpen()) {
     if (e.key === "Escape") closeQR();
+    return;
+  }
+  if (aboutOpen()) {
+    if (e.key === "Escape") closeAboutModal();
     return;
   }
   if (typing) {
@@ -297,6 +379,13 @@ $("refresh").addEventListener("click", load);
 $("toggle-all").addEventListener("click", toggleAll);
 $("qr-close").addEventListener("click", closeQR);
 $("qr-backdrop").addEventListener("click", closeQR);
+$("about-close").addEventListener("click", closeAboutModal);
+$("about-backdrop").addEventListener("click", closeAboutModal);
+$("about-ok").addEventListener("click", closeAboutModal);
+$("about-update").addEventListener("click", () => {
+  const repo = (state.appInfo && state.appInfo.repo_url) || "https://github.com/wentianyi26-oss/wifi-pass-viewer";
+  apiOpenUrl(repo);
+});
 $("search").addEventListener("input", (e) => {
   state.query = e.target.value;
   const pos = e.target.selectionStart;
@@ -304,6 +393,9 @@ $("search").addEventListener("input", (e) => {
   const s = $("search");
   if (s) { s.focus(); try { s.setSelectionRange(pos, pos); } catch { /* 忽略 */ } }
 });
+
+state.showIntro = !introSeen();
+initAppInfo();
 
 if (window.pywebview && window.pywebview.api) {
   load();

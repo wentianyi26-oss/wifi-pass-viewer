@@ -31,15 +31,33 @@
 
 <div id="toast"></div>
 
-<div id="qr-modal" class="hidden">
-  <div class="qr-backdrop" id="qr-backdrop"></div>
-  <div class="qr-card">
-    <button class="qr-x" id="qr-close">✕</button>
+<div id="qr-modal" class="overlay hidden">
+  <div class="overlay-backdrop" id="qr-backdrop"></div>
+  <div class="modal-card qr-card">
+    <button class="modal-x" id="qr-close">✕</button>
     <div class="qr-title">扫码连接 WiFi</div>
     <div class="qr-ssid" id="qr-ssid"></div>
     <canvas id="qr-canvas" width="252" height="252"></canvas>
     <div class="qr-pw" id="qr-pw"></div>
     <div class="qr-note">用手机相机或系统扫一扫即可连接</div>
+  </div>
+</div>
+
+<div id="about-modal" class="overlay hidden">
+  <div class="overlay-backdrop" id="about-backdrop"></div>
+  <div class="modal-card about-card">
+    <button class="modal-x" id="about-close">✕</button>
+    <div class="about-title">WiFi 密码查看器</div>
+    <div class="about-version" id="about-version">v—</div>
+    <div class="about-body">
+      <p>密码读取自本机 Windows 存档（netsh），工具<b>不联网、不上传、只读</b>。</p>
+      <p>复制密码时已自动排除剪贴板历史（Win+V）与云同步，60 秒后自动清除。</p>
+      <p>查不到密码的网络：开放网络本身没有密码；企业网络（802.1X）不保存明文密码。</p>
+    </div>
+    <div class="about-actions">
+      <button class="btn secondary" id="about-update">检查更新</button>
+      <button class="btn primary" id="about-ok">知道了</button>
+    </div>
   </div>
 </div>
 
