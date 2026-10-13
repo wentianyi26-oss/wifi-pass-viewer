@@ -1,0 +1,15 @@
+
+There is 1 interface on the system:
+
+    Name                   : WLAN
+    Description            : Intel(R) Wi-Fi 6E AX211 160MHz
+    GUID                   : 2a2e7e3a-0000-0000-0000-a2b3c4d5e6f7
+    Physical address       : 34:5a:60:11:22:33
+    Interface type         : Primary
+    State                  : connected
+    SSID                   : HomeNet
+    BSSID                  : 88:99:aa:bb:cc:dd
+    Network type           : Infrastructure
+    Radio type             : 802.11ax
+    Authentication         : WPA2-Personal
+    Cipher                 : CCMP

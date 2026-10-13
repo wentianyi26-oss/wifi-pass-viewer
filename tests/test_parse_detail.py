@@ -17,7 +17,7 @@ def test_wpa2_detail_with_password_containing_colon():
 def test_open_network_has_no_password():
     text = (FIXTURES / "detail_zh_open.txt").read_text(encoding="utf-8")
     detail = parse_profile_detail(text)
-    assert detail.authentication == "打开"
+    assert detail.authentication == "开放式"
     assert detail.password is None
     assert detail.has_password is False
 
