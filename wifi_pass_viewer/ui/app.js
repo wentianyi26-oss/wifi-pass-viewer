@@ -30,22 +30,29 @@ function toast(msg) {
 }
 
 async function copyText(text) {
+  let ok = false;
   try {
     await navigator.clipboard.writeText(text);
+    ok = true;
   } catch {
     const ta = document.createElement("textarea");
     ta.value = text;
     document.body.appendChild(ta);
     ta.select();
-    try { document.execCommand("copy"); } catch { /* 忽略：剪贴板不可用 */ }
+    try { ok = document.execCommand("copy"); } catch { ok = false; }
     ta.remove();
   }
-  toast("密码已复制到剪贴板");
+  toast(ok ? "密码已复制到剪贴板" : "复制失败，请手动选择复制");
 }
 
 function visibleNetworks() {
   const q = state.query.trim().toLowerCase();
   return state.networks.filter((n) => !q || n.ssid.toLowerCase().includes(q));
+}
+
+function allShownOf(list) {
+  const withPw = list.filter((n) => n.has_password);
+  return withPw.length > 0 && withPw.every((n) => state.shown.has(n.ssid));
 }
 
 /* ── 数据加载 ────────────────────────────────────────── */
@@ -95,9 +102,9 @@ function renderSidebar() {
   }
   $("count-line").textContent = `已保存 ${state.networks.length} 个网络${state.connectedAvailable ? "" : " · 未取得连接状态"}`;
 
-  const allShown = list.length > 0 && list.every((n) => state.shown.has(n.ssid));
+  const allShown = allShownOf(list);
   const btn = $("toggle-all");
-  btn.disabled = list.length === 0;
+  btn.disabled = list.filter((n) => n.has_password).length === 0;
   btn.textContent = allShown ? "全部隐藏" : "全部显示";
 
   if (list.length === 0) {
@@ -219,7 +226,7 @@ function toggleShow(ssid) {
 
 function toggleAll() {
   const list = visibleNetworks();
-  const all = list.length > 0 && list.every((n) => state.shown.has(n.ssid));
+  const all = allShownOf(list);
   list.forEach((n) => { if (n.has_password) { if (all) state.shown.delete(n.ssid); else state.shown.add(n.ssid); } });
   render();
 }
@@ -233,7 +240,7 @@ function clearSearch() {
 /* 二维码弹窗 */
 async function openQR(net) {
   try {
-    const matrix = await window.pywebview.api.qr_matrix(net.ssid, net.password);
+    const matrix = await window.pywebview.api.qr_matrix(net.ssid, net.password, net.authentication || "");
     const canvas = $("qr-canvas");
     const quiet = 4; // 静默区
     const size = matrix.length + quiet * 2;

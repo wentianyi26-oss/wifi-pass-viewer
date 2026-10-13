@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from wifi_pass_viewer.scanner import WindowsWifiScanner
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -120,3 +122,23 @@ def test_empty_output_detail_is_treated_as_failure():
     office = result.networks[3]
     assert office.has_password is False
     assert "读取失败" in (office.note or "")
+
+
+def test_scan_raises_with_netsh_error_message_when_profiles_empty():
+    responses = [
+        ("show profiles", gbk("profiles_error_zh.txt")),
+        ("show interfaces", gbk("interfaces_error_zh.txt")),
+    ]
+    with pytest.raises(RuntimeError) as excinfo:
+        WindowsWifiScanner(FakeRunner(responses)).scan()
+    assert "未运行" in str(excinfo.value)
+
+
+def test_scan_with_genuinely_empty_profiles_returns_empty_list():
+    empty = "接口 WLAN 上的配置文件:\n\n用户配置文件\n-------------\n"
+    responses = [
+        ("show profiles", empty.encode("utf-8")),
+        ("show interfaces", gbk("interfaces_error_zh.txt")),
+    ]
+    result = WindowsWifiScanner(FakeRunner(responses)).scan()
+    assert result.networks == []

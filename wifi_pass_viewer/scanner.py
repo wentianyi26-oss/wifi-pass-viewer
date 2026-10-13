@@ -56,12 +56,9 @@ def parse_profiles(text: str) -> list[str]:
     """
     names: list[str] = []
     for line in text.splitlines():
-        s = line.strip()
-        for label in _PROFILE_LABELS:
-            if s.startswith(label) and ":" in s:
-                value = s.split(":", 1)[1].strip()
-                if value and value not in names:
-                    names.append(value)
+        value = _value_after_label(line, _PROFILE_LABELS)
+        if value and value not in names:
+            names.append(value)
     return names
 
 
@@ -120,6 +117,21 @@ def _default_runner(args: list[str], timeout: float = 20.0) -> bytes:
     return proc.stdout
 
 
+_ERROR_MARKERS = ("未运行", "not running", "返回错误", "error", "错误", "异常")
+
+
+def _looks_like_error(text: str) -> bool:
+    low = text.lower()
+    return any(marker.lower() in low for marker in _ERROR_MARKERS)
+
+
+def _first_non_empty_line(text: str) -> str:
+    for line in text.splitlines():
+        if line.strip():
+            return line.strip()
+    return "netsh 未返回任何内容"
+
+
 class WindowsWifiScanner:
     """扫描本机已保存的 WiFi：列表 → 逐个详情（含密码）→ 连接状态。"""
 
@@ -129,8 +141,10 @@ class WindowsWifiScanner:
     def scan(self) -> ScanResult:
         profiles_text = decode_output(self._run(["netsh", "wlan", "show", "profiles"]))
         names = parse_profiles(profiles_text)
+        if not names and _looks_like_error(profiles_text):
+            # 服务未运行/权限异常等情况：把 netsh 的报错原文交给界面展示
+            raise RuntimeError(_first_non_empty_line(profiles_text))
 
-        interface = InterfaceStatus(available=False)
         try:
             interface_text = decode_output(self._run(["netsh", "wlan", "show", "interfaces"]))
             interface = parse_interfaces(interface_text)
@@ -144,7 +158,7 @@ class WindowsWifiScanner:
         return ScanResult(networks=networks, connected_available=interface.available, note=note)
 
     def _read_network(self, ssid: str, connected_ssid: str | None) -> Network:
-        network = Network(ssid=ssid, connected=(ssid == connected_ssid))
+        detail = None
         try:
             text = decode_output(
                 self._run(["netsh", "wlan", "show", "profile", f"name={ssid}", "key=clear"])
@@ -152,26 +166,4 @@ class WindowsWifiScanner:
             detail = parse_profile_detail(text)
         except Exception:
             detail = None
-
-        if detail is None or (detail.authentication is None and detail.password is None):
-            network.note = "读取失败（可尝试刷新）"
-            return network
-
-        network.authentication = detail.authentication
-        network.cipher = detail.cipher
-        if detail.has_password:
-            network.password = detail.password
-            network.has_password = True
-        else:
-            network.note = _no_password_reason(detail.authentication)
-        return network
-
-
-def _no_password_reason(authentication: str | None) -> str:
-    auth = (authentication or "").strip()
-    low = auth.lower()
-    if auth.startswith(("打开", "开放")) or low.startswith("open"):
-        return "开放网络（无密码）"
-    if "企业" in auth or "enterprise" in low:
-        return "企业网络（802.1X），无预共享密码"
-    return "该网络没有保存密码"
+        return Network.from_detail(ssid, detail, connected=(ssid == connected_ssid))

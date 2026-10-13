@@ -35,14 +35,15 @@ class Api:
         except Exception as exc:  # 兜底：任何异常都以结构化的错误给前端
             return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
 
-    def qr_matrix(self, ssid: str, password: str) -> list[list[bool]]:
-        payload = make_wifi_payload(ssid, password)
+    def qr_matrix(self, ssid: str, password: str, authentication: str = "") -> list[list[bool]]:
+        security = "WEP" if "wep" in (authentication or "").lower() else "WPA"
+        payload = make_wifi_payload(ssid, password, security=security)
         return matrix_for(payload)
 
 
 def main() -> None:
     api = Api()
-    window = webview.create_window(
+    webview.create_window(
         "WiFi 密码查看器",
         url=str(UI_DIR / "index.html"),
         js_api=api,
@@ -53,7 +54,6 @@ def main() -> None:
     )
     debug = os.environ.get("WIFI_VIEWER_DEBUG") == "1"
     webview.start(debug=debug)
-    del window
 
 
 if __name__ == "__main__":
