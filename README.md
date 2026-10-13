@@ -64,7 +64,6 @@ py wifi_pass_viewer/app.py
 3. ✅ TDD 实现（`tests/` 31 个测试；`docs/PRD.md` 约定测试缝）
 4. ✅ 真实机器集成冒烟（`scripts/smoke_real.py`，密码仅打印长度）
 5. ✅ 双轴代码评审 + 修正；GitHub CLI 管理文档与版本
-6. ✅ 公众号文章与发布物料（`docs/article/`，ui-ux-pro-max 设计系统）
 
 ## 目录结构
 
@@ -77,9 +76,9 @@ wifi_pass_viewer/     # 应用（Python + pywebview + WebView2）
   ui/                 # 界面
 tests/                # pytest 夹具与测试（31 个）
 prototype/            # 原型（一次性产物，含 shots 截图）
-scripts/              # 冒烟、文章构建、图标构建等工具脚本
+scripts/              # 冒烟、图标构建等工具脚本
 assets/               # 应用图标（源 HTML + 产物）
-docs/                 # PRD、评审记录、发布清单、文章物料、截图
+docs/                 # PRD、评审记录、发布清单、截图
 run.bat               # 源码方式启动
 ```
 
