@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WiFi 密码查看器 · UI 原型 (PROTOTYPE)</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════
+  UI 原型（PROTOTYPE —— 一次性产物，勿当成品使用）
+  ───────────────────────────────────────────────────────────────────
+  问题：WiFi 密码查看器的桌面界面应该长什么样？
+  计划：3 个结构完全不同的变体，通过 ?variant=A|B|C 切换：
+        A = 卡片网格（友好消费风，鼠标优先）
+        B = 主从分栏（Win11 设置风，选择→大按钮复制）
+        C = 控制台表格（极客风，键盘优先）
+        底部浮动条左右切换；← → 键也可切换。
+  评审后：选定赢家并入正式实现，全套变体存档到 throwaway 分支。
+  ═══════════════════════════════════════════════════════════════════
+-->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --mono: "Cascadia Code", Consolas, "Courier New", monospace;
+    --sans: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  html, body { height: 100%; }
+  body { font-family: var(--sans); overflow-x: hidden; }
+
+  /* ── 原型标记（不属于任何变体的设计） ─────────────────────── */
+  #proto-flag {
+    position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 900;
+    font: 11px/1.6 var(--mono); letter-spacing: .5px;
+    background: repeating-linear-gradient(45deg, #f59e0b, #f59e0b 8px, #d97706 8px, #d97706 16px);
+    color: #111; padding: 4px 10px; border-radius: 999px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.25); opacity: .92; pointer-events: none;
+  }
+  #toast {
+    position: fixed; bottom: 84px; right: 24px; z-index: 950;
+    background: #111827; color: #fff; font-size: 13px;
+    padding: 9px 16px; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.3);
+    opacity: 0; transform: translateY(8px); transition: all .22s ease; pointer-events: none;
+  }
+  #toast.show { opacity: 1; transform: translateY(0); }
+
+  /* ── 浮动变体切换条（原型工具，不属于任何变体） ────────────── */
+  #switcher {
+    position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 1000;
+    display: flex; align-items: center; gap: 2px;
+    background: rgba(17, 24, 39, .92); color: #fff;
+    border: 1px solid rgba(255,255,255,.14);
+    border-radius: 999px; padding: 5px 6px;
+    box-shadow: 0 10px 32px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.08);
+    backdrop-filter: blur(8px); font-size: 13px; user-select: none;
+  }
+  #switcher button {
+    all: unset; cursor: pointer; width: 30px; height: 30px; border-radius: 50%;
+    display: grid; place-items: center; color: #cbd5e1; font-size: 15px;
+  }
+  #switcher button:hover { background: rgba(255,255,255,.12); color: #fff; }
+  #switcher .label { padding: 0 10px; min-width: 168px; text-align: center; letter-spacing: .3px; }
+  #switcher .label b { color: #fbbf24; font-family: var(--mono); }
+  #switcher .dots { display: flex; gap: 5px; padding: 0 8px 0 2px; }
+  #switcher .dot { width: 6px; height: 6px; border-radius: 50%; background: #475569; cursor: pointer; }
+  #switcher .dot.on { background: #fbbf24; }
+
+  /* ════════════════════════════════════════════════════════════════
+     A · 卡片网格（友好消费风）
+     ════════════════════════════════════════════════════════════════ */
+  .va-app { min-height: 100vh; background: linear-gradient(180deg,#eef2ff 0%,#f7f8fc 240px); padding: 34px 34px 110px; }
+  .va-head { max-width: 1080px; margin: 0 auto 22px; }
+  .va-title { display: flex; align-items: center; gap: 12px; }
+  .va-title h1 { font-size: 24px; color: #1e1b4b; letter-spacing: .5px; }
+  .va-title .badge { font-size: 12px; color: #4338ca; background: #e0e7ff; padding: 3px 10px; border-radius: 999px; }
+  .va-bar { display: flex; gap: 12px; margin-top: 16px; }
+  .va-search { flex: 1; position: relative; }
+  .va-search input {
+    width: 100%; padding: 12px 16px 12px 42px; font-size: 14px;
+    border: 1px solid #dbe0f0; border-radius: 12px; background: #fff; outline: none;
+    box-shadow: 0 1px 3px rgba(30,27,75,.05);
+  }
+  .va-search input:focus { border-color: #818cf8; box-shadow: 0 0 0 3px #e0e7ff; }
+  .va-search::before { content: "⌕"; position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 17px; }
+  .va-btn { border: none; cursor: pointer; border-radius: 12px; font-size: 14px; padding: 0 18px; background: #4f46e5; color: #fff; font-weight: 600; box-shadow: 0 2px 8px rgba(79,70,229,.3); }
+  .va-btn:hover { background: #4338ca; }
+  .va-btn.ghost { background: #fff; color: #4f46e5; border: 1px solid #dbe0f0; box-shadow: none; font-weight: 500; }
+  .va-grid { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fill,minmax(310px,1fr)); gap: 16px; }
+  .va-card { background: #fff; border-radius: 16px; padding: 20px; box-shadow: 0 2px 10px rgba(30,27,75,.06), 0 1px 2px rgba(30,27,75,.05); border: 1px solid #eef0f8; transition: transform .15s, box-shadow .15s; }
+  .va-card:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(30,27,75,.12); }
+  .va-card .top { display: flex; align-items: center; gap: 12px; }
+  .va-wifi-ico { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: #eef2ff; color: #4f46e5; font-size: 19px; flex: none; }
+  .va-card h3 { font-size: 16px; color: #1f2937; word-break: break-all; }
+  .va-sub { display: flex; gap: 6px; margin-top: 3px; flex-wrap: wrap; }
+  .va-chip { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #f3f4f6; color: #4b5563; }
+  .va-chip.ok { background: #dcfce7; color: #15803d; }
+  .va-chip.warn { background: #fef3c7; color: #b45309; }
+  .va-chip.danger { background: #fee2e2; color: #b91c1c; }
+  .va-chip.info { background: #dbeafe; color: #1d4ed8; }
+  .va-pw { margin-top: 16px; background: #f8faff; border: 1px dashed #c7d2fe; border-radius: 12px; padding: 13px 15px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .va-pw .mask { font-family: var(--mono); font-size: 17px; letter-spacing: 2px; color: #94a3b8; flex: 1; word-break: break-all; }
+  .va-pw .mask.shown { color: #059669; letter-spacing: 0; font-weight: 600; }
+  .va-pw .none { color: #b0b7c9; font-size: 13px; font-family: var(--sans); letter-spacing: 0; }
+  .va-ico-btn { all: unset; cursor: pointer; width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; background: #fff; border: 1px solid #e5e7eb; font-size: 15px; transition: all .12s; }
+  .va-ico-btn:hover { border-color: #a5b4fc; background: #eef2ff; }
+  .va-foot { margin-top: 14px; display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #9ca3af; }
+  .va-empty { grid-column: 1/-1; text-align: center; padding: 60px 0; color: #9ca3af; }
+
+  /* ════════════════════════════════════════════════════════════════
+     B · 主从分栏（Win11 设置风）
+     ════════════════════════════════════════════════════════════════ */
+  .vb-app { display: flex; height: 100vh; background: #f3f3f3; overflow: hidden; }
+  .vb-side { width: 320px; flex: none; background: #fbfbfb; border-right: 1px solid #e5e5e5; display: flex; flex-direction: column; }
+  .vb-side .head { padding: 20px 18px 12px; }
+  .vb-side h1 { font-size: 18px; color: #202020; font-weight: 600; }
+  .vb-side .cnt { font-size: 12px; color: #8a8a8a; margin-top: 4px; }
+  .vb-search { margin: 10px 14px 6px; position: relative; }
+  .vb-search input { width: 100%; padding: 8px 12px 8px 34px; border-radius: 8px; border: 1px solid #e0e0e0; background: #fff; font-size: 13px; outline: none; }
+  .vb-search input:focus { border-color: #0067c0; box-shadow: 0 0 0 2px rgba(0,103,192,.15); }
+  .vb-search::before { content: "⌕"; position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: #9a9a9a; }
+  .vb-list { flex: 1; overflow-y: auto; padding: 8px 8px 90px; }
+  .vb-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; cursor: pointer; position: relative; }
+  .vb-row:hover { background: #f0f0f0; }
+  .vb-row.sel { background: #e8f1fb; }
+  .vb-row.sel::before { content: ""; position: absolute; left: 4px; top: 50%; transform: translateY(-50%); width: 3px; height: 18px; border-radius: 3px; background: #0067c0; }
+  .vb-row .ico { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; background: #eaeaea; font-size: 16px; flex: none; }
+  .vb-row.sel .ico { background: #d6e8f8; }
+  .vb-row .meta { flex: 1; min-width: 0; }
+  .vb-row .ssid { font-size: 13.5px; color: #202020; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .vb-row .sub { font-size: 11.5px; color: #8a8a8a; margin-top: 1px; }
+  .vb-row .conn { font-size: 10.5px; color: #0f7b0f; background: #dff6dd; padding: 2px 7px; border-radius: 999px; flex: none; }
+  .vb-detail { flex: 1; overflow-y: auto; padding: 40px 46px 110px; }
+  .vb-detail h2 { font-size: 26px; color: #1a1a1a; font-weight: 600; word-break: break-all; }
+  .vb-detail .subrow { display: flex; gap: 10px; margin-top: 10px; align-items: center; }
+  .vb-tag { font-size: 12px; padding: 3px 10px; border-radius: 999px; background: #eaeaea; color: #4a4a4a; }
+  .vb-tag.ok { background: #dff6dd; color: #0f7b0f; }
+  .vb-tag.blue { background: #dce9f7; color: #005a9e; }
+  .vb-panel { margin-top: 30px; background: #fff; border: 1px solid #e8e8e8; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  .vb-panel .t { font-size: 13px; font-weight: 600; color: #202020; padding: 14px 18px 0; }
+  .vb-pw-box { padding: 14px 18px 18px; display: flex; align-items: center; gap: 16px; }
+  .vb-pw-eye { width: 42px; height: 42px; flex: none; border-radius: 8px; border: 1px solid #e0e0e0; background: #fafafa; cursor: pointer; font-size: 17px; }
+  .vb-pw-eye:hover { background: #f0f0f0; }
+  .vb-pw-val { flex: 1; font-family: var(--mono); font-size: 22px; letter-spacing: 4px; color: #7a7a7a; word-break: break-all; }
+  .vb-pw-val.shown { color: #0f7b0f; letter-spacing: 0; font-weight: 700; }
+  .vb-copy { border: none; cursor: pointer; background: #0067c0; color: #fff; font-size: 14px; font-weight: 600; padding: 11px 26px; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,103,192,.35); }
+  .vb-copy:hover { background: #005a9e; }
+  .vb-copy:disabled, .vb-copy.off { background: #c9c9c9; box-shadow: none; cursor: default; }
+  .vb-kv { border-top: 1px solid #f0f0f0; }
+  .vb-kv .r { display: flex; justify-content: space-between; padding: 12px 18px; font-size: 13.5px; border-bottom: 1px solid #f0f0f0; }
+  .vb-kv .r:last-child { border-bottom: none; }
+  .vb-kv .k { color: #6b6b6b; }
+  .vb-kv .v { color: #202020; }
+  .vb-empty { color: #8a8a8a; text-align: center; margin-top: 120px; font-size: 14px; }
+
+  /* ════════════════════════════════════════════════════════════════
+     C · 控制台表格（极客风）
+     ════════════════════════════════════════════════════════════════ */
+  .vc-app { min-height: 100vh; background: #0b0f14; color: #c9d1d9; font-family: var(--mono); padding: 0 0 100px; }
+  .vc-win { max-width: 1020px; margin: 0 auto; }
+  .vc-bar { display: flex; align-items: center; gap: 8px; padding: 14px 4px 12px; border-bottom: 1px solid #1c2733; }
+  .vc-dots { display: flex; gap: 7px; margin-right: 10px; }
+  .vc-dots i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+  .vc-dots i:nth-child(1){ background:#ff5f56 } .vc-dots i:nth-child(2){ background:#ffbd2e } .vc-dots i:nth-child(3){ background:#27c93f }
+  .vc-bar .path { color: #7d8590; font-size: 12.5px; }
+  .vc-bar .path b { color: #58a6ff; font-weight: 400; }
+  .vc-search { margin-left: auto; display: flex; align-items: center; gap: 6px; color: #7d8590; font-size: 12.5px; }
+  .vc-search input { width: 200px; background: #0f1620; border: 1px solid #233040; color: #c9d1d9; font-family: var(--mono); font-size: 12.5px; border-radius: 5px; padding: 5px 10px; outline: none; }
+  .vc-search input:focus { border-color: #2f81f7; box-shadow: 0 0 0 2px rgba(47,129,247,.2); }
+  .vc-tbl { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 13.5px; }
+  .vc-tbl th { text-align: left; color: #7d8590; font-weight: 400; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; padding: 8px 12px; border-bottom: 1px solid #1c2733; }
+  .vc-tbl td { padding: 11px 12px; border-bottom: 1px solid #10161d; }
+  .vc-tbl tbody tr { cursor: pointer; }
+  .vc-tbl tbody tr:hover { background: #0f1620; }
+  .vc-tbl tbody tr.sel { background: #101d2c; box-shadow: inset 3px 0 0 #2f81f7; }
+  .vc-ssid { color: #e6edf3; }
+  .vc-ssid .hash { color: #30363d; margin-right: 8px; }
+  .vc-sec { color: #8b949e; }
+  .vc-sec.ok { color: #3fb950; } .vc-sec.warn { color: #d29922; } .vc-sec.danger { color: #f85149; } .vc-sec.info { color: #58a6ff; }
+  .vc-pw { letter-spacing: 2px; color: #484f58; }
+  .vc-pw.shown { color: #3fb950; letter-spacing: 0; }
+  .vc-tag { font-size: 11px; padding: 1px 8px; border: 1px solid #233040; border-radius: 999px; color: #8b949e; }
+  .vc-tag.conn { color: #3fb950; border-color: #1d3a2a; background: #0d1f16; }
+  .vc-none { color: #30363d; }
+  .vc-status { position: fixed; bottom: 0; left: 0; right: 0; background: #0d1319; border-top: 1px solid #1c2733; padding: 10px 26px; display: flex; gap: 22px; font-size: 12.5px; color: #7d8590; z-index: 500; }
+  .vc-status b { color: #d29922; font-weight: 400; }
+  .vc-status .cursor { color: #58a6ff; margin-left: auto; }
+  .vc-empty { padding: 40px 12px; color: #484f58; }
+</style>
+</head>
+<body>
+
+<div id="proto-flag">原型 PROTOTYPE · 仅用于界面评审</div>
+<div id="app"></div>
+<div id="switcher">
+  <button id="sw-prev" title="上一个变体（←）">◀</button>
+  <div class="label" id="sw-label"></div>
+  <button id="sw-next" title="下一个变体（→）">▶</button>
+  <div class="dots" id="sw-dots"></div>
+</div>
+<div id="toast"></div>
+
+<script>
+/* ═══════════════ 模拟数据（原型用，非真实数据） ═══════════════ */
+const NETWORKS = [
+  { ssid: "HomeWiFi_5G",      sec: "WPA2-Personal",   secKind: "ok",     pw: "HomeSweet#2024",   connected: true,  band: "5 GHz",  saved: "2024-03-11" },
+  { ssid: "ChinaNet-7fKd",    sec: "WPA2-Personal",   secKind: "ok",     pw: "12345678",         connected: false, band: "2.4 GHz", saved: "2024-01-02" },
+  { ssid: "iPhone 热点",       sec: "WPA2-Personal",   secKind: "ok",     pw: "iphone8888",       connected: false, band: "5 GHz",  saved: "2025-06-20" },
+  { ssid: "OFFICE-STAFF",     sec: "WPA2-Enterprise", secKind: "info",   pw: null,               connected: false, band: "5 GHz",  saved: "2023-11-05", note: "802.1X 登录，无预共享密码" },
+  { ssid: "CoffeeClub-Free",  sec: "开放（无密码）",   secKind: "danger", pw: null,               connected: false, band: "2.4 GHz", saved: "2025-08-14" },
+  { ssid: "TP-LINK_2.4G",     sec: "WPA/WPA2-Personal", secKind: "warn", pw: "tplink@admin123",  connected: false, band: "2.4 GHz", saved: "2022-07-30" },
+  { ssid: "Hotel_Grand",      sec: "WPA2-Personal",   secKind: "ok",     pw: "stay2023!",        connected: false, band: "5 GHz",  saved: "2023-10-01" },
+  { ssid: "Xiaomi_AABBCC",    sec: "WPA2-Personal",   secKind: "ok",     pw: "1234567890",       connected: false, band: "2.4 GHz", saved: "2024-05-19" },
+];
+
+/* ═══════════════ 全局原型状态 ═══════════════ */
+const state = {
+  variant: "A",                      // A | B | C
+  shown: new Set(),                  // 已显示密码的 ssid 集合
+  query: "",                         // 搜索词（A/B 共享一份，够用）
+  selected: 0,                       // B/C 当前选中项索引
+};
+const VARIANTS = [
+  { key: "A", name: "卡片网格" },
+  { key: "B", name: "主从分栏" },
+  { key: "C", name: "控制台表格" },
+];
+
+/* ═══════════════ 工具函数 ═══════════════ */
+function mask(pw) { return "•".repeat(Math.min(pw.length, 14)); }
+function visibleNetworks() {
+  const q = state.query.trim().toLowerCase();
+  return NETWORKS.filter(n => !q || n.ssid.toLowerCase().includes(q));
+}
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 1600);
+}
+async function copyText(txt) {
+  try { await navigator.clipboard.writeText(txt); }
+  catch {
+    const ta = document.createElement("textarea");
+    ta.value = txt; document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); } catch {}
+    ta.remove();
+  }
+  toast("已复制到剪贴板：" + (txt.length > 18 ? txt.slice(0, 18) + "…" : txt));
+}
+function toggleShow(ssid) {
+  if (state.shown.has(ssid)) state.shown.delete(ssid); else state.shown.add(ssid);
+  render();
+}
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
+
+/* ═══════════════ 变体 A · 卡片网格 ═══════════════ */
+function renderA() {
+  const list = visibleNetworks();
+  const cards = list.map(n => {
+    const shownPw = state.shown.has(n.ssid);
+    let pwHtml;
+    if (n.pw === null) {
+      pwHtml = `<span class="none">${esc(n.note || "无密码（开放网络）")}</span>`;
+    } else {
+      pwHtml = `<span class="mask ${shownPw ? "shown" : ""}">${shownPw ? esc(n.pw) : mask(n.pw)}</span>`;
+    }
+    return `
+    <div class="va-card">
+      <div class="top">
+        <div class="va-wifi-ico">📶</div>
+        <div style="min-width:0;flex:1">
+          <h3>${esc(n.ssid)}</h3>
+          <div class="va-sub">
+            <span class="va-chip ${n.secKind}">${esc(n.sec)}</span>
+            ${n.connected ? '<span class="va-chip ok">已连接</span>' : ""}
+          </div>
+        </div>
+      </div>
+      <div class="va-pw">
+        ${pwHtml}
+        ${n.pw !== null ? `
+          <button class="va-ico-btn" title="${shownPw ? "隐藏" : "显示"}密码" onclick="toggleShow('${esc(n.ssid)}')">${shownPw ? "🙈" : "👁"}</button>
+          <button class="va-ico-btn" title="复制密码" onclick="copyText('${esc(n.pw)}')">📋</button>` : ""}
+      </div>
+      <div class="va-foot">
+        <span>保存于 ${n.saved}</span><span>${n.band}</span>
+      </div>
+    </div>`;
+  }).join("");
+
+  return `
+  <div class="va-app">
+    <div class="va-head">
+      <div class="va-title">
+        <h1>WiFi 密码查看器</h1>
+        <span class="badge">已保存 ${NETWORKS.length} 个网络</span>
+      </div>
+      <div class="va-bar">
+        <div class="va-search"><input id="va-q" placeholder="搜索 WiFi 名称…" value="${esc(state.query)}"></div>
+        <button class="va-btn ghost" onclick="vl_all(this)">全部显示</button>
+        <button class="va-btn" onclick="toast('已重新扫描已保存的网络（原型演示）')">↻ 刷新</button>
+      </div>
+    </div>
+    <div class="va-grid">${cards || `<div class="va-empty">没有找到匹配的网络</div>`}</div>
+  </div>`;
+}
+function vl_all(btn) {
+  const list = visibleNetworks();
+  const all = list.length > 0 && list.every(n => state.shown.has(n.ssid));
+  list.forEach(n => all ? state.shown.delete(n.ssid) : state.shown.add(n.ssid));
+  render();
+}
+
+/* ═══════════════ 变体 B · 主从分栏 ═══════════════ */
+function renderB() {
+  const list = visibleNetworks();
+  if (list.length && state.selected >= list.length) state.selected = 0;
+  const cur = list[state.selected] || null;
+  const rows = list.map((n, i) => `
+    <div class="vb-row ${i === state.selected ? "sel" : ""}" onclick="vb_select(${i})">
+      <div class="ico">${n.secKind === "danger" ? "🔓" : "🔒"}</div>
+      <div class="meta">
+        <div class="ssid">${esc(n.ssid)}</div>
+        <div class="sub">${esc(n.sec)} · ${n.band}</div>
+      </div>
+      ${n.connected ? '<span class="conn">已连接</span>' : ""}
+    </div>`).join("");
+
+  let detail;
+  if (!cur) {
+    detail = `<div class="vb-empty">左侧选择一个网络查看详情</div>`;
+  } else {
+    const shownPw = state.shown.has(cur.ssid);
+    let pwBox;
+    if (cur.pw === null) {
+      pwBox = `
+        <div class="vb-pw-box">
+          <div class="vb-pw-val" style="letter-spacing:0;font-size:15px;color:#8a8a8a">${esc(cur.note || "该网络没有保存密码（开放网络）")}</div>
+          <button class="vb-copy off" disabled>复制密码</button>
+        </div>`;
+    } else {
+      pwBox = `
+        <div class="vb-pw-box">
+          <button class="vb-pw-eye" title="${shownPw ? "隐藏" : "显示"}" onclick="toggleShow('${esc(cur.ssid)}')">${shownPw ? "🙈" : "👁"}</button>
+          <div class="vb-pw-val ${shownPw ? "shown" : ""}">${shownPw ? esc(cur.pw) : mask(cur.pw)}</div>
+          <button class="vb-copy" onclick="copyText('${esc(cur.pw)}')">复制密码</button>
+        </div>`;
+    }
+    detail = `
+      <h2>${esc(cur.ssid)}</h2>
+      <div class="subrow">
+        <span class="vb-tag ok">🔒 ${esc(cur.sec)}</span>
+        ${cur.connected ? '<span class="vb-tag blue">已连接</span>' : '<span class="vb-tag">未连接</span>'}
+        <span class="vb-tag">${cur.band}</span>
+      </div>
+      <div class="vb-panel">
+        <div class="t">网络密码</div>
+        ${pwBox}
+      </div>
+      <div class="vb-panel">
+        <div class="t" style="padding-bottom:10px">网络详情</div>
+        <div class="vb-kv">
+          <div class="r"><span class="k">加密类型</span><span class="v">${esc(cur.sec)}</span></div>
+          <div class="r"><span class="k">频段</span><span class="v">${cur.band}</span></div>
+          <div class="r"><span class="k">首次保存</span><span class="v">${cur.saved}</span></div>
+          <div class="r"><span class="k">配置来源</span><span class="v">用户手动连接</span></div>
+        </div>
+      </div>`;
+  }
+
+  return `
+  <div class="vb-app">
+    <div class="vb-side">
+      <div class="head">
+        <h1>WiFi 密码查看器</h1>
+        <div class="cnt">已保存 ${NETWORKS.length} 个网络 · 选择查看详情</div>
+      </div>
+      <div class="vb-search"><input id="vb-q" placeholder="搜索…" value="${esc(state.query)}"></div>
+      <div class="vb-list">${rows || `<div style="padding:20px;color:#8a8a8a;font-size:13px">没有匹配的网络</div>`}</div>
+    </div>
+    <div class="vb-detail">${detail}</div>
+  </div>`;
+}
+function vb_select(i) { state.selected = i; render(); }
+
+/* ═══════════════ 变体 C · 控制台表格 ═══════════════ */
+function renderC() {
+  const list = visibleNetworks();
+  if (list.length && state.selected >= list.length) state.selected = 0;
+  const rows = list.map((n, i) => {
+    const shownPw = state.shown.has(n.ssid);
+    let pwCell;
+    if (n.pw === null) pwCell = `<span class="vc-none">—</span>`;
+    else pwCell = `<span class="vc-pw ${shownPw ? "shown" : ""}">${shownPw ? esc(n.pw) : mask(n.pw)}</span>`;
+    return `
+    <tr class="${i === state.selected ? "sel" : ""}" onclick="vc_select(${i})" ondblclick="toggleShow('${esc(n.ssid)}')">
+      <td class="vc-ssid"><span class="hash">#${String(i + 1).padStart(2, "0")}</span>${esc(n.ssid)}</td>
+      <td><span class="vc-sec ${n.secKind}">${esc(n.sec)}</span></td>
+      <td>${pwCell}</td>
+      <td>${n.connected ? '<span class="vc-tag conn">● 已连接</span>' : '<span class="vc-tag">○ 已保存</span>'}</td>
+    </tr>`;
+  }).join("");
+
+  return `
+  <div class="vc-app">
+    <div class="vc-win">
+      <div class="vc-bar">
+        <div class="vc-dots"><i></i><i></i><i></i></div>
+        <span class="path">wifi-pass <span style="color:#30363d">::</span> <b>${list.length}</b> 个已保存网络</span>
+        <div class="vc-search">filter <input id="vc-q" placeholder="按名称过滤 /" value="${esc(state.query)}"></div>
+      </div>
+      <table class="vc-tbl">
+        <thead><tr><th>SSID</th><th>加密</th><th>密码</th><th>状态</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="4" class="vc-empty">// 没有匹配的网络</td></tr>`}</tbody>
+      </table>
+    </div>
+    <div class="vc-status">
+      <span><b>/</b> 过滤</span>
+      <span><b>↑↓</b> 选择</span>
+      <span><b>Enter</b> 显示/隐藏</span>
+      <span><b>C</b> 复制密码</span>
+      <span class="cursor">variant C :: console</span>
+    </div>
+  </div>`;
+}
+function vc_select(i) { state.selected = i; render(); }
+
+/* ═══════════════ 主渲染 + 变体切换条 ═══════════════ */
+const app = document.getElementById("app");
+function render() {
+  if (state.variant === "A") app.innerHTML = renderA();
+  else if (state.variant === "B") app.innerHTML = renderB();
+  else app.innerHTML = renderC();
+
+  // 搜索框绑定（A/B 共享 state.query）
+  const q = document.getElementById("va-q") || document.getElementById("vb-q") || document.getElementById("vc-q");
+  if (q) q.addEventListener("input", e => { state.query = e.target.value; render(); refocus(q); });
+
+  // 切换条
+  const v = VARIANTS.find(x => x.key === state.variant);
+  document.getElementById("sw-label").innerHTML = `<b>${v.key}</b> · ${v.name}`;
+  document.getElementById("sw-dots").innerHTML =
+    VARIANTS.map(x => `<span class="dot ${x.key === state.variant ? "on" : ""}" data-k="${x.key}" title="切到 ${x.key}"></span>`).join("");
+  document.querySelectorAll("#sw-dots .dot").forEach(d =>
+    d.addEventListener("click", () => setVariant(d.dataset.k)));
+}
+function refocus(el) {
+  // 重新渲染后恢复焦点与光标，避免输入中断
+  const id = el.id; const pos = el.selectionStart;
+  const next = document.getElementById(id);
+  if (next) { next.focus(); try { next.setSelectionRange(pos, pos); } catch {} }
+}
+function getVariant() {
+  const s = new URLSearchParams(location.search).get("variant");
+  if (s && VARIANTS.some(v => v.key === s.toUpperCase())) return s.toUpperCase();
+  const h = (location.hash.match(/variant=([A-Ca-c])/) || [])[1];
+  return h ? h.toUpperCase() : "A";
+}
+function setVariant(k) {
+  state.variant = k;
+  const url = location.pathname + "?variant=" + k;
+  try { history.replaceState(null, "", url); }
+  catch { location.hash = "variant=" + k; }
+  render();
+}
+function cycle(step) {
+  const i = VARIANTS.findIndex(v => v.key === state.variant);
+  setVariant(VARIANTS[(i + step + VARIANTS.length) % VARIANTS.length].key);
+}
+document.getElementById("sw-prev").addEventListener("click", () => cycle(-1));
+document.getElementById("sw-next").addEventListener("click", () => cycle(1));
+
+/* 键盘：← → 切换变体（输入框聚焦时不拦截）；C 变体支持 ↑↓ / Enter / C / / */
+document.addEventListener("keydown", e => {
+  const t = e.target;
+  const typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+  if (typing) {
+    if (e.key === "Escape" && t.id) { state.query = ""; render(); }
+    return;
+  }
+  if (e.key === "ArrowLeft") { cycle(-1); e.preventDefault(); }
+  else if (e.key === "ArrowRight") { cycle(1); e.preventDefault(); }
+  else if (state.variant === "C") {
+    const list = visibleNetworks();
+    if (e.key === "ArrowDown") { state.selected = Math.min(state.selected + 1, list.length - 1); render(); e.preventDefault(); }
+    else if (e.key === "ArrowUp") { state.selected = Math.max(state.selected - 1, 0); render(); e.preventDefault(); }
+    else if (e.key === "Enter" && list[state.selected]) { toggleShow(list[state.selected].ssid); e.preventDefault(); }
+    else if ((e.key === "c" || e.key === "C") && list[state.selected]?.pw) { copyText(list[state.selected].pw); e.preventDefault(); }
+    else if (e.key === "/") { const q = document.getElementById("vc-q"); if (q) { q.focus(); e.preventDefault(); } }
+  }
+});
+
+/* 启动 */
+state.variant = getVariant();
+render();
+</script>
+</body>
+</html>
